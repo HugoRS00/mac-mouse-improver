@@ -17,7 +17,13 @@ final class CursorOverlayWindow: NSWindow {
         self.isOpaque = false
         self.backgroundColor = .clear
         self.hasShadow = false
-        self.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) - 1)
+        // The system cursor is drawn by WindowServer at `cursorWindow` level.
+        // To paint over it we need to sit ABOVE that, so we use
+        // `assistiveTechHighWindow` — the level reserved for accessibility
+        // overlays, which is the only documented level above the cursor.
+        self.level = NSWindow.Level(
+            rawValue: Int(CGWindowLevelForKey(.assistiveTechHighWindow))
+        )
         self.ignoresMouseEvents = true
         self.collectionBehavior = [
             .canJoinAllSpaces,

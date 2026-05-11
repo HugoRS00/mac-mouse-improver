@@ -63,30 +63,34 @@ final class CursorView: NSView {
         }
     }
 
+    private static let pressedScale: CGFloat = 0.78
+
     private func playPress() {
         cursorLayer.removeAnimation(forKey: "release")
         let anim = CABasicAnimation(keyPath: "transform.scale")
         anim.fromValue = 1.0
-        anim.toValue = 0.82
-        anim.duration = 0.09
+        anim.toValue = Self.pressedScale
+        anim.duration = 0.08
         anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
         anim.fillMode = .forwards
         anim.isRemovedOnCompletion = false
         cursorLayer.add(anim, forKey: "press")
-        cursorLayer.setValue(0.82, forKeyPath: "transform.scale")
+        cursorLayer.setValue(Self.pressedScale, forKeyPath: "transform.scale")
     }
 
     private func playRelease() {
         cursorLayer.removeAnimation(forKey: "press")
-        let anim = CABasicAnimation(keyPath: "transform.scale")
-        anim.fromValue = 0.82
-        anim.toValue = 1.0
-        anim.duration = 0.22
-        // Slight overshoot, like a spring.
-        anim.timingFunction = CAMediaTimingFunction(controlPoints: 0.34, 1.56, 0.64, 1.0)
-        anim.fillMode = .forwards
-        anim.isRemovedOnCompletion = false
-        cursorLayer.add(anim, forKey: "release")
+        let spring = CASpringAnimation(keyPath: "transform.scale")
+        spring.fromValue = Self.pressedScale
+        spring.toValue = 1.0
+        spring.damping = 9
+        spring.stiffness = 220
+        spring.mass = 0.55
+        spring.initialVelocity = 0
+        spring.duration = spring.settlingDuration
+        spring.fillMode = .forwards
+        spring.isRemovedOnCompletion = false
+        cursorLayer.add(spring, forKey: "release")
         cursorLayer.setValue(1.0, forKeyPath: "transform.scale")
     }
 }

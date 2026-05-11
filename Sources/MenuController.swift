@@ -7,6 +7,9 @@ final class MenuController: NSObject {
     private let cursor: CursorController
     private weak var statusItem: NSStatusItem?
 
+    private var updateItem: NSMenuItem?
+    private var updateSeparator: NSMenuItem?
+
     private static let enabledKey = "MacMouseImprover.enabled"
 
     init(cursor: CursorController, statusItem: NSStatusItem) {
@@ -87,5 +90,31 @@ final class MenuController: NSObject {
         let newState = !LaunchAtLogin.isEnabled
         LaunchAtLogin.isEnabled = newState
         sender.state = LaunchAtLogin.isEnabled ? .on : .off
+    }
+
+    // MARK: Update item
+
+    func showUpdateAvailable(version: String, tag: String, url: URL) {
+        if updateItem == nil {
+            let item = NSMenuItem(title: "Update to v\(version) →", action: #selector(downloadUpdate(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = ["tag": tag, "url": url] as [String: Any]
+            menu.insertItem(item, at: 0)
+            let sep = NSMenuItem.separator()
+            menu.insertItem(sep, at: 1)
+            updateItem = item
+            updateSeparator = sep
+        } else {
+            updateItem?.title = "Update to v\(version) →"
+            updateItem?.representedObject = ["tag": tag, "url": url] as [String: Any]
+        }
+    }
+
+    @objc private func downloadUpdate(_ sender: NSMenuItem) {
+        guard
+            let info = sender.representedObject as? [String: Any],
+            let url = info["url"] as? URL
+        else { return }
+        NSWorkspace.shared.open(url)
     }
 }

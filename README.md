@@ -76,11 +76,30 @@ the first time. After that it just runs.
 
 That's it.
 
+## Updating
+
+The app checks GitHub Releases once a day in the background. When a newer
+version is published, an **Update to v…** entry appears at the top of the
+menu. Click it to open the release page and download the new build.
+
+You can also re-run `./install.sh` from a fresh clone — it replaces the
+existing app in `/Applications` cleanly.
+
 ## Uninstall
 
+If you have the repo cloned, just run:
+
 ```bash
-rm -rf "/Applications/Mac Mouse Improver.app"
-defaults delete dev.macmouseimprover.app 2>/dev/null || true
+./uninstall.sh
+```
+
+Or, as a one-liner from anywhere:
+
+```bash
+killall MacMouseImprover 2>/dev/null; \
+  rm -rf "/Applications/Mac Mouse Improver.app"; \
+  defaults delete dev.macmouseimprover.app 2>/dev/null; \
+  osascript -e 'tell application "System Events" to delete login item "Mac Mouse Improver"' 2>/dev/null
 ```
 
 ## How it works
