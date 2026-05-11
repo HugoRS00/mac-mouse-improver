@@ -12,11 +12,20 @@ final class CursorController {
 
         rebuildOverlays()
         startMonitoring()
+        CursorHider.hide()
 
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenChanged),
             name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+        // Re-assert the hide on wake / config changes — some system events
+        // (display change, screen lock unlock) restore the system cursor.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reassertHide),
+            name: NSWorkspace.didWakeNotification,
             object: nil
         )
     }
@@ -26,6 +35,7 @@ final class CursorController {
         isEnabled = false
 
         stopMonitoring()
+        CursorHider.show()
         for window in overlayWindows {
             window.orderOut(nil)
         }
@@ -36,6 +46,18 @@ final class CursorController {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func reassertHide() {
+        guard isEnabled else { return }
+        // Briefly toggle so the hide count is reset cleanly.
+        CursorHider.show()
+        CursorHider.hide()
     }
 
     @objc private func screenChanged() {

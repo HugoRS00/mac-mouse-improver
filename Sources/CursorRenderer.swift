@@ -2,11 +2,10 @@ import AppKit
 import CoreGraphics
 
 enum CursorRenderer {
-    /// Canvas size in points. Sized to match the system cursor closely
-    /// (only marginally larger) so the silhouette feels native, with a
-    /// small amount of padding so the soft drop shadow doesn't get
-    /// clipped at the edges.
-    static let size = CGSize(width: 24, height: 30)
+    /// Canvas size in points. Sized to sit closely over the system cursor
+    /// with a couple of pixels of padding around the silhouette so the
+    /// soft drop shadow has room to fade out.
+    static let size = CGSize(width: 22, height: 28)
 
     /// Hotspot in image coordinates (origin top-left, y down). Sits at the
     /// tip of the arrow so the click point matches what the user sees.
@@ -44,7 +43,7 @@ enum CursorRenderer {
         // Soft drop shadow.
         ctx.saveGState()
         let shadowColor = CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.42)
-        ctx.setShadow(offset: CGSize(width: 0, height: 1.5), blur: 2.5, color: shadowColor)
+        ctx.setShadow(offset: CGSize(width: 0, height: 1.5), blur: 2.6, color: shadowColor)
         ctx.addPath(path)
         ctx.setFillColor(CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1))
         ctx.fillPath()
@@ -66,82 +65,57 @@ enum CursorRenderer {
         return ctx.makeImage() ?? blankImage(width: pixelWidth, height: pixelHeight)
     }
 
-    /// The arrow silhouette with rounded corners. Coordinates are in image
-    /// space (y down) with the hotspot at (5, 5) — the tip. Tracing clockwise
-    /// from the tip: down the left edge, up-right to the inner kink, around
-    /// the tail, back up to the top-right of the head, then diagonally back
-    /// to the tip (that closing line is the angled right edge of the head).
+    /// The cursor silhouette: a heavily curved teardrop with a soft tail
+    /// indentation. Built from four cubic Bézier segments so every part of
+    /// the boundary is smoothly curved — no sharp corners anywhere except
+    /// the very tip.
+    ///
+    /// Coordinates are in image space (y down) with the hotspot at (4, 4) —
+    /// the tip. Tracing clockwise from the tip:
+    ///   tip → left flank → tail belly → right flank → back to tip.
     private static func arrowPath() -> CGPath {
-        let vertices: [CGPoint] = [
-            CGPoint(x: 4,  y: 4),    // 0: tip
-            CGPoint(x: 4,  y: 23),   // 1: bottom-left of head
-            CGPoint(x: 9,  y: 18),   // 2: inner kink (head / tail)
-            CGPoint(x: 12, y: 26),   // 3: tail bottom-left
-            CGPoint(x: 15, y: 25),   // 4: tail bottom-right
-            CGPoint(x: 11, y: 17),   // 5: tail upper-right
-            CGPoint(x: 16, y: 13),   // 6: top-right of head
-        ]
-        // Rounding radius per vertex (0 = sharp). The tip stays almost sharp
-        // so it still reads as a precise pointer; every other corner gets a
-        // generous radius for the soft, friendly silhouette in the reference.
-        let radii: [CGFloat] = [
-            0.7,  // tip
-            2.0,  // bottom-left of head
-            1.6,  // inner kink
-            2.2,  // tail bottom-left
-            2.2,  // tail bottom-right
-            1.6,  // tail upper-right
-            2.0,  // top-right of head
-        ]
-        return roundedPolygon(vertices: vertices, radii: radii)
-    }
-
-    /// Builds a closed CGPath that traces the given polygon, rounding each
-    /// vertex with the matching radius using a quadratic Bézier curve.
-    /// The radius is automatically capped to half the length of either
-    /// adjacent edge so adjacent rounded corners never overlap.
-    private static func roundedPolygon(vertices: [CGPoint], radii: [CGFloat]) -> CGPath {
         let path = CGMutablePath()
-        let n = vertices.count
-        guard n >= 3 else { return path }
 
-        var entry = [CGPoint](repeating: .zero, count: n)
-        var exitP = [CGPoint](repeating: .zero, count: n)
-        for i in 0..<n {
-            let prev = vertices[(i + n - 1) % n]
-            let curr = vertices[i]
-            let next = vertices[(i + 1) % n]
-            let r = radii[i]
+        let tip          = CGPoint(x: 4,  y: 4)
+        let leftBottom   = CGPoint(x: 7,  y: 22)   // where the left flank meets the tail belly
+        let tailEnd      = CGPoint(x: 14, y: 24)   // the soft tip of the tail
+        let rightTop     = CGPoint(x: 16, y: 14)   // top of the right flank
 
-            let inDx = curr.x - prev.x
-            let inDy = curr.y - prev.y
-            let inLen = max(0.0001, (inDx * inDx + inDy * inDy).squareRoot())
+        // Tip → left bottom. Left flank bows slightly outward (smaller x)
+        // before sweeping in to the bottom of the body.
+        path.move(to: tip)
+        path.addCurve(
+            to: leftBottom,
+            control1: CGPoint(x: 2.4, y: 12),
+            control2: CGPoint(x: 4,   y: 21)
+        )
 
-            let outDx = next.x - curr.x
-            let outDy = next.y - curr.y
-            let outLen = max(0.0001, (outDx * outDx + outDy * outDy).squareRoot())
+        // Left bottom → tail end. A short, rounded "belly" that gives the
+        // cursor its tail. Control points sit below the belly so the curve
+        // bulges downward instead of crossing through it.
+        path.addCurve(
+            to: tailEnd,
+            control1: CGPoint(x: 9.5, y: 25),
+            control2: CGPoint(x: 12,  y: 26)
+        )
 
-            let cappedR = min(r, inLen * 0.5, outLen * 0.5)
+        // Tail end → right top. The outer-right of the body sweeps up.
+        // Control points pulled outward so the right flank bows.
+        path.addCurve(
+            to: rightTop,
+            control1: CGPoint(x: 16.5, y: 22),
+            control2: CGPoint(x: 17.5, y: 18)
+        )
 
-            entry[i] = CGPoint(
-                x: curr.x - (inDx / inLen) * cappedR,
-                y: curr.y - (inDy / inLen) * cappedR
-            )
-            exitP[i] = CGPoint(
-                x: curr.x + (outDx / outLen) * cappedR,
-                y: curr.y + (outDy / outLen) * cappedR
-            )
-        }
+        // Right top → tip. The closing diagonal, lightly curved so the head
+        // looks bowed rather than flat.
+        path.addCurve(
+            to: tip,
+            control1: CGPoint(x: 13, y: 10),
+            control2: CGPoint(x: 8.5, y: 5.5)
+        )
 
-        path.move(to: exitP[0])
-        for i in 1..<n {
-            path.addLine(to: entry[i])
-            path.addQuadCurve(to: exitP[i], control: vertices[i])
-        }
-        path.addLine(to: entry[0])
-        path.addQuadCurve(to: exitP[0], control: vertices[0])
         path.closeSubpath()
-
         return path
     }
 
